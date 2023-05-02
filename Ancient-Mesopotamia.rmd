@@ -1,0 +1,41 @@
+---
+title: "Ancient Mesopotamia Data Set"
+author: "Kelsey McCornack"
+date: "2023-05-02"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning = FALSE, message = FALSE}
+# Load libraries
+library(tidyverse)
+library(rvest)
+```
+
+```{r, warning = FALSE}
+# Retrieving flat html from target web page
+kings_html <- read_html('https://www.metmuseum.org/toah/hd/meru/hd_meru.htm')
+
+```
+
+```{r}
+# Extract king names and dates from html
+kings <- kings_html %>%
+  html_elements('.row-text .inner') %>%
+  html_text() %>%
+  as.data.frame()
+
+dates <- kings_html %>%
+  html_elements('.row-date') %>%
+  html_text() %>%
+  as.data.frame()
+
+master <- cbind(kings, dates)
+
+head(master)
+```
+
+-- Need to deal with section headers. They're being lumped in with kings.
