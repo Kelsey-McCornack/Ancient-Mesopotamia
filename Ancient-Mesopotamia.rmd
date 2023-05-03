@@ -13,29 +13,71 @@ knitr::opts_chunk$set(echo = TRUE)
 # Load libraries
 library(tidyverse)
 library(rvest)
+library(zoo)
 ```
 
 ```{r, warning = FALSE}
 # Retrieving flat html from target web page
 kings_html <- read_html('https://www.metmuseum.org/toah/hd/meru/hd_meru.htm')
-
 ```
 
 ```{r}
-# Extract king names and dates from html
-kings <- kings_html %>%
-  html_elements('.row-text .inner') %>%
-  html_text() %>%
-  as.data.frame()
+# extract target text from html
+text <- kings_html %>%
+  html_elements('.row-text') %>%
+  html_text()
 
 dates <- kings_html %>%
   html_elements('.row-date') %>%
-  html_text() %>%
-  as.data.frame()
+  html_text()
 
-master <- cbind(kings, dates)
-
-head(master)
+master <- as.data.frame(cbind(text, dates))
 ```
 
--- Need to deal with section headers. They're being lumped in with kings.
+```{r}
+# get list of dynasties and geographic areas
+headers <- subset(master$text, dates == '')
+
+# separate dynasties and areas into their own lists
+is_dynasty <- grepl('Dynas', headers)
+
+dynasties <- headers[is_dynasty]
+areas <- headers[!is_dynasty]
+```
+
+```{r}
+# create an id column that categorizes text column values into dynasty, area, and king
+master$id <- ifelse(master$text %in% headers,
+                    ifelse(master$text %in% dynasties, 'dynasty', 'area'),
+                           'king')
+
+# make a new id column that identifies values as dynasties, kings, and areas
+master$dynasty <- ifelse(master$id == 'dynasty', master$text, NA)
+master$king <- ifelse(master$id == 'king', master$text, NA)
+master$area <- ifelse(master$id == 'area', master$text, NA)
+
+# fill the NAs in each column with the previous non-NA value
+master$area <- na.locf(master$area)
+
+master <- filter(master, !id == 'area')
+
+master$dynasty <- na.locf(master$dynasty)
+master <- filter(master, !id == 'dynasty')
+
+# remove id column now that its served its purpose
+master <- master %>%
+  select(-id)
+```
+
+```{r}
+# get rid of 'B.C' from the date column
+master$dates <- gsub(' B.C.', '', master$dates)
+
+# get single year reign values into the same format as multi-year reigns
+master$dates <- ifelse(grepl('–', master$dates) == TRUE, master$dates,
+                              paste(master$dates, '–', master$dates))
+
+# split date column into reign_start and reign_end columns
+master <- master
+master <- separate(master, dates, into = c('reign_start', 'reign_end'), sep = '–')
+```
